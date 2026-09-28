@@ -1,0 +1,8 @@
+# Build output
+dist/
+.vscode/
+
+# ufbt local caches (if ever created inside the project)
+.ufbt/
+__pycache__/
+*.pyc

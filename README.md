@@ -3,19 +3,10 @@
 # 🧠 Memory Game for Flipper Zero
 
 A Simon-Says style memory game — watch the pattern, repeat it, and see how
-far you get. Built as a native Flipper Zero app in C.
+far you get.
 
 ![Platform](https://img.shields.io/badge/platform-Flipper%20Zero-orange)
-![Language](https://img.shields.io/badge/language-C-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
-
-<!--
-  Screenshots go here once available — see assets/screenshots/.
-  Example once filled in:
-  <img src="assets/screenshots/menu.png" width="200"/>
-  <img src="assets/screenshots/gameplay.png" width="200"/>
-  <img src="assets/screenshots/highscore.png" width="200"/>
--->
 
 </div>
 
@@ -38,33 +29,24 @@ far you get. Built as a native Flipper Zero app in C.
 
 ## 📥 Installation
 
-### Option A — Install the ready-made app
+You'll need [qFlipper](https://flipperzero.one/update), the official
+Flipper Zero desktop app, to transfer files to your device.
 
-1. Download `memory_game.fap` from this repository (see the
-   [Releases](../../releases) page, or the `dist/` folder if building
-   yourself).
-2. Install [qFlipper](https://flipperzero.one/update) if you don't have it
-   yet, and connect your Flipper Zero via USB.
-3. Open qFlipper → **File Manager**.
-4. Copy `memory_game.fap` into `SD Card/apps/Games/`.
-5. On the Flipper: **Menu → Apps → Games → Memory Game**.
+**Step by step:**
 
-### Option B — Build it yourself from source
+1. Download **`memory_game.fap`** from this repository (green **Code**
+   button → or directly from the file list above).
+2. Install qFlipper if you don't have it yet:
+   [flipperzero.one/update](https://flipperzero.one/update)
+3. Connect your Flipper Zero to your computer via USB.
+4. Open qFlipper. It should show your Flipper as connected.
+5. In qFlipper, click **File Manager** (the folder icon on the left).
+6. Navigate to `SD Card` → `apps` → `Games`.
+   (If the `Games` folder doesn't exist, create it.)
+7. Drag and drop `memory_game.fap` into that folder.
+8. On the Flipper Zero itself: **Menu → Apps → Games → Memory Game**.
 
-You'll need [Python 3](https://www.python.org/downloads/) and
-[`ufbt`](https://github.com/flipperdevices/flipperzero-ufbt) (the micro
-Flipper Build Tool).
-
-```bash
-pip install ufbt
-```
-
-Then, from the `memory_game` folder:
-
-```bash
-python -m ufbt          # builds dist/memory_game.fap
-python -m ufbt launch   # builds AND installs/launches it on a connected Flipper
-```
+That's it — no compiling, no extra tools needed.
 
 ## 🎮 Controls
 
@@ -81,24 +63,6 @@ python -m ufbt launch   # builds AND installs/launches it on a connected Flipper
 | | `OK` | New game |
 | | `Right` | View highscore |
 
-## 🗂 Project structure
-
-```
-memory_game/
-├── application.fam     # App manifest (name, category, entry point)
-├── memory_game.c        # Full game logic + UI (single file)
-├── icon.png              # 10x10 app list icon
-├── make_icon.py          # Small Pillow script that generated icon.png
-└── dist/                 # Build output (memory_game.fap) — not tracked in git
-```
-
-## 🛠 Built with
-
-- [ufbt](https://github.com/flipperdevices/flipperzero-ufbt) — micro Flipper
-  Build Tool
-- The official [Flipper Zero firmware](https://github.com/flipperdevices/flipperzero-firmware)
-  GUI/notification/storage APIs
-
 ## 📄 License
 
-MIT — see [LICENSE](LICENSE).
+MIT — see [LICENSE](LICENSE). Free to use and share.

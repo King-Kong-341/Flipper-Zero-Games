@@ -1,8 +1,12 @@
-# Build output
+# This repository publishes only the ready-to-install app (memory_game.fap)
+# and documentation. Source/dev files stay local and are not tracked here.
+memory_game.c
+application.fam
+icon.png
+make_icon.py
+assets/
 dist/
 .vscode/
-
-# ufbt local caches (if ever created inside the project)
 .ufbt/
 __pycache__/
 *.pyc

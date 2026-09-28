@@ -1,68 +1,47 @@
-<div align="center">
+# Memory Game – Flipper Zero App
 
-# 🧠 Memory Game for Flipper Zero
+A Simon-Says style memory game for the Flipper Zero, controlled entirely
+with the 4 arrow keys + OK/Back.
 
-A Simon-Says style memory game — watch the pattern, repeat it, and see how
-far you get.
+## Controls
 
-![Platform](https://img.shields.io/badge/platform-Flipper%20Zero-orange)
-![License](https://img.shields.io/badge/license-MIT-green)
+- **Title screen:** Up/Down = select Start/Settings, OK = confirm,
+  Left = Rules, Right = Highscore
+- **Watch phase:** the sequence lights up automatically (field turns black,
+  LED blinks blue for every step)
+- **Your turn:** just press the arrow key that lit up - no OK needed,
+  the key press itself is the guess. LED blinks green when correct, red
+  when wrong.
+- **Back (short):** in-game → "Quit game?" confirmation, on info screens →
+  go back one step
+- **Back (hold 1 second):** instantly ends the current run
+- **Game over:** Left = Menu, OK = New game, Back = Menu, Right = Highscore
 
-</div>
+The **top 5 all-time results** are saved automatically to the SD card and
+re-sorted after every run. Settings (Sound/Vibration/LED) can be toggled
+independently, and the highscore list can be reset there too.
 
----
+## Build instructions (ufbt)
 
-## ✨ Features
+Python and `ufbt` are already installed on this PC.
 
-- **Simon-Says gameplay** — a pattern of arrows lights up, you repeat it;
-  every round adds one more step
-- **No extra confirmation needed** — pressing an arrow key *is* your guess,
-  no OK button required
-- **Color-coded feedback** — the RGB LED turns blue while the pattern plays,
-  green for a correct guess, red for a wrong one
-- **Persistent Top-5 Highscore** — automatically saved to the SD card and
-  re-sorted after every run, with a scrollable list
-- **Settings screen** — toggle sound, vibration and LED feedback
-  independently, plus a highscore reset
-- **Polished UI** — rounded panels, scroll indicators, small idle
-  animations and a retro descending "game over" jingle
+Build (and copy the `.fap` into `dist/`):
 
-## 📥 Installation
+```bash
+python -m ufbt
+```
 
-You'll need [qFlipper](https://flipperzero.one/update), the official
-Flipper Zero desktop app, to transfer files to your device.
+Build **and** launch directly on a connected Flipper:
 
-**Step by step:**
+```bash
+python -m ufbt launch
+```
 
-1. Download **`memory_game.fap`** from this repository (green **Code**
-   button → or directly from the file list above).
-2. Install qFlipper if you don't have it yet:
-   [flipperzero.one/update](https://flipperzero.one/update)
-3. Connect your Flipper Zero to your computer via USB.
-4. Open qFlipper. It should show your Flipper as connected.
-5. In qFlipper, click **File Manager** (the folder icon on the left).
-6. Navigate to `SD Card` → `apps` → `Games`.
-   (If the `Games` folder doesn't exist, create it.)
-7. Drag and drop `memory_game.fap` into that folder.
-8. On the Flipper Zero itself: **Menu → Apps → Games → Memory Game**.
+The finished app is at `dist/memory_game.fap` - copy it via qFlipper to
+`apps/Games/` on the Flipper's SD card, or use `launch` to skip that step
+entirely.
 
-That's it — no compiling, no extra tools needed.
+## Files
 
-## 🎮 Controls
-
-| Screen | Input | Action |
-|---|---|---|
-| Title screen | `Up`/`Down` | Select Start / Settings |
-| | `Left` / `Right` | Rules / Highscore |
-| | `OK` | Confirm selection |
-| Watching phase | — | Just watch the pattern |
-| Your turn | `Up`/`Down`/`Left`/`Right` | Guess the next step (no OK needed) |
-| Any screen | `Back` (short) | Go back / "Quit game?" prompt during a run |
-| Any screen | `Back` (hold 1s) | Instantly end the current run |
-| Game over | `Left` | Back to menu |
-| | `OK` | New game |
-| | `Right` | View highscore |
-
-## 📄 License
-
-MIT — see [LICENSE](LICENSE). Free to use and share.
+- `application.fam` – app manifest (name, category, entry point)
+- `memory_game.c` – full game logic + UI (single file)

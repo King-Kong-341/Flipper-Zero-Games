@@ -10,8 +10,7 @@
  *   Watching:      just watch - LED blinks blue for every step
  *   Your turn:     press the arrow key that lit up - no OK needed.
  *                  LED blinks green when correct, red when wrong.
- *   Back (short):  in-game -> "Quit game?" prompt, elsewhere -> go back
- *   Back (1s):     instantly ends the current run
+ *   Back (any length): in-game -> "Quit game?" prompt, elsewhere -> go back
  *   Game over:     Left = Exit app, OK = New game, Back = Menu, Right = List
  *
  * The top 5 all-time results are saved automatically to the SD card and
@@ -61,9 +60,6 @@ static const char* const rules_lines[] = {
     "",
     "Every round the pattern",
     "grows by one more step.",
-    "",
-    "Hold Back for 1s to quit",
-    "instantly during a run.",
 };
 #define RULES_LINE_COUNT (sizeof(rules_lines) / sizeof(rules_lines[0]))
 #define RULES_VISIBLE 4
@@ -432,6 +428,20 @@ static void save_settings(GameApp* app) {
 
 /* ---------- Game flow ---------- */
 
+/* Picks a random direction for pattern[index], but never lets the same
+ * direction occur 3 times in a row (max 2 repeats). */
+static uint8_t random_pattern_dir(GameApp* app, uint8_t index) {
+    uint8_t forbidden = 0xFF;
+    if(index >= 2 && app->pattern[index - 1] == app->pattern[index - 2]) {
+        forbidden = app->pattern[index - 1];
+    }
+    uint8_t d;
+    do {
+        d = (uint8_t)(furi_hal_random_get() % 4);
+    } while(d == forbidden);
+    return d;
+}
+
 static void start_watch_round(GameApp* app) {
     app->watch_step = 0;
     app->watch_sub = SubFlashOn;
@@ -444,7 +454,7 @@ static void start_watch_round(GameApp* app) {
 
 static void start_new_game(GameApp* app) {
     app->level = 1;
-    app->pattern[0] = (uint8_t)(furi_hal_random_get() % 4);
+    app->pattern[0] = random_pattern_dir(app, 0);
     app->sub_timer_ms = ROUND_INTRO_MS;
     app->screen = ScreenRoundIntro;
 }
@@ -524,7 +534,7 @@ static void handle_tick(GameApp* app) {
         app->sub_timer_ms -= TICK_MS;
         if(app->sub_timer_ms <= 0) {
             /* prepare next round */
-            app->pattern[app->level] = (uint8_t)(furi_hal_random_get() % 4);
+            app->pattern[app->level] = random_pattern_dir(app, app->level);
             app->level++;
             app->sub_timer_ms = ROUND_INTRO_MS;
             app->screen = ScreenRoundIntro;
@@ -572,23 +582,24 @@ static void handle_input_guess(GameApp* app, Direction d) {
 static void handle_input(GameApp* app, InputEvent* ev) {
     if(ev->type != InputTypeShort && ev->type != InputTypeLong) return;
 
-    /* Global panic button: Back held 1s = end the run immediately. */
     if(ev->key == InputKeyBack && ev->type == InputTypeLong) {
-        if(app->screen == ScreenWatching || app->screen == ScreenInput ||
-           app->screen == ScreenRoundIntro || app->screen == ScreenConfirmExit ||
-           app->screen == ScreenRoundSuccess) {
-            abort_game(app);
+        bool mid_game = app->screen == ScreenWatching || app->screen == ScreenInput ||
+                        app->screen == ScreenRoundIntro || app->screen == ScreenConfirmExit ||
+                        app->screen == ScreenRoundSuccess;
+        if(!mid_game) {
+            if(app->screen == ScreenMenu) {
+                app->running = false;
+            } else {
+                go_to_menu(app);
+            }
             return;
         }
-        if(app->screen == ScreenMenu) {
-            app->running = false;
-            return;
-        }
-        go_to_menu(app);
+        /* Mid-run: a long Back press now behaves exactly like a short one
+         * (opens the "Quit game?" prompt) - fall through to the switch
+         * below instead of quitting instantly. */
+    } else if(ev->type != InputTypeShort) {
         return;
     }
-
-    if(ev->type != InputTypeShort) return;
 
     switch(app->screen) {
     case ScreenMenu:
@@ -827,7 +838,7 @@ static void draw_scroll_arrow(Canvas* canvas, int16_t cx, int16_t cy, bool up) {
  * small font glyph. Same technique as draw_scroll_arrow, just bigger and
  * in all 4 directions. */
 static void draw_direction_arrow(Canvas* canvas, int16_t cx, int16_t cy, Direction d) {
-    const int16_t size = 7; /* apex-to-base length / half base width */
+    const int16_t size = 5; /* apex-to-base length / half base width */
     for(int16_t k = 0; k < size; k++) {
         switch(d) {
         case DirUp: {
@@ -1065,27 +1076,34 @@ static void draw_settings(Canvas* canvas, GameApp* app) {
         }
 
         if(i == SETTINGS_VOLUME) {
-            /* slider row: label, a bar track with a filled portion, and the
-             * percentage, all on the row's single center line */
+            /* slider row: label, a 10-segment "equalizer" bar (one segment
+             * per 10%), and the percentage, all on the row's center line */
             char pct[6];
             snprintf(pct, sizeof(pct), "%u%%", app->volume);
             canvas_draw_str_aligned(
                 canvas, box_x + 4, row_y[slot], AlignLeft, AlignCenter, "Vol");
 
-            const int16_t bar_x = 34, bar_w = 46, bar_h = 6;
-            int16_t bar_y = row_y[slot] - bar_h / 2;
-            canvas_draw_frame(canvas, bar_x, bar_y, bar_w, bar_h);
-            int16_t fill_w = (bar_w - 2) * app->volume / 100;
-            if(fill_w > 0) canvas_draw_box(canvas, bar_x + 1, bar_y + 1, fill_w, bar_h - 2);
-            /* small blinking tick right at the fill edge while adjusting */
-            if(selected && ((app->anim_tick / 6) % 2) == 0 && app->volume > 0 &&
-               app->volume < 100) {
-                canvas_draw_line(
-                    canvas,
-                    bar_x + 1 + fill_w,
-                    bar_y - 1,
-                    bar_x + 1 + fill_w,
-                    bar_y + bar_h);
+            const int16_t seg_w = 3, seg_gap = 1, seg_h = 9, seg_count = 10;
+            const int16_t bar_x = 33;
+            int16_t bar_y = row_y[slot] - seg_h / 2;
+            uint8_t filled_segs = app->volume / 10;
+            for(uint8_t s = 0; s < seg_count; s++) {
+                int16_t seg_x = bar_x + s * (seg_w + seg_gap);
+                /* segments grow taller towards the loud end, like a small
+                 * equalizer - reads as a level meter, not just a bar */
+                int16_t h = seg_h - 5 + (s * 5) / (seg_count - 1);
+                int16_t y = bar_y + (seg_h - h);
+                if(s < filled_segs) {
+                    canvas_draw_box(canvas, seg_x, y, seg_w, h);
+                } else {
+                    canvas_draw_frame(canvas, seg_x, y, seg_w, h);
+                }
+            }
+            /* small blinking caret over the boundary segment while selected */
+            if(selected && ((app->anim_tick / 6) % 2) == 0) {
+                uint8_t idx = filled_segs > 0 ? filled_segs - 1 : 0;
+                int16_t cx = bar_x + idx * (seg_w + seg_gap) + seg_w / 2;
+                draw_scroll_arrow(canvas, cx, bar_y - 3, false);
             }
 
             canvas_draw_str_aligned(

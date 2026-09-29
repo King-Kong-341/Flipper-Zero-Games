@@ -88,8 +88,7 @@ python -m ufbt launch   # builds AND installs/launches it on a connected Flipper
 | | `Left` (elsewhere) / `Back` | Back to menu |
 | Watching phase | — | Just watch the pattern |
 | Your turn | `Up`/`Down`/`Left`/`Right` | Guess the next step (no OK needed) |
-| Any screen | `Back` (short) | Go back / "Quit game?" prompt during a run |
-| Any screen | `Back` (hold 1s) | Instantly end the current run |
+| Any screen | `Back` (short or long) | Go back / "Quit game?" prompt during a run |
 | Game over | `Left` / `Back` | Back to menu |
 | | `OK` | New game |
 | | `Right` | View highscore |

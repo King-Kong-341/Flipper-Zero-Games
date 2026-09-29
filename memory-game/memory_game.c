@@ -68,7 +68,13 @@ static const char* const rules_lines[] = {
 #define RULES_LINE_COUNT (sizeof(rules_lines) / sizeof(rules_lines[0]))
 #define RULES_VISIBLE 4
 
-#define SETTINGS_ITEM_COUNT 4
+/* Settings rows, in display order: */
+#define SETTINGS_SOUND 0
+#define SETTINGS_VOLUME 1
+#define SETTINGS_VIBRO 2
+#define SETTINGS_LED 3
+#define SETTINGS_RESET 4
+#define SETTINGS_ITEM_COUNT 5
 #define SETTINGS_VISIBLE 2
 
 typedef enum {
@@ -147,6 +153,7 @@ typedef struct {
     uint8_t settings_selection;
     uint8_t settings_scroll;
     bool sound_enabled;
+    uint8_t volume; /* 0-100, in steps of 10 */
     bool vibro_enabled;
     bool led_enabled;
     int32_t toast_timer_ms;
@@ -167,14 +174,15 @@ typedef struct {
 /* ---------- Sound & LED ---------- */
 
 static void tone_start(GameApp* app, float freq) {
-    if(!app->sound_enabled) return;
+    if(!app->sound_enabled || app->volume == 0) return;
     if(!app->speaker_owned) {
         if(furi_hal_speaker_acquire(30)) {
             app->speaker_owned = true;
         }
     }
     if(app->speaker_owned) {
-        furi_hal_speaker_start(freq, 0.6f);
+        float gain = ((float)app->volume / 100.0f) * 0.7f;
+        furi_hal_speaker_start(freq, gain);
     }
 }
 
@@ -191,7 +199,7 @@ static void tone_stop(GameApp* app) {
 }
 
 static void tone_blip(GameApp* app, float freq, uint32_t ms) {
-    if(!app->sound_enabled) return;
+    if(!app->sound_enabled || app->volume == 0) return;
     tone_start(app, freq);
     furi_delay_ms(ms);
     tone_stop(app);
@@ -375,18 +383,28 @@ static bool bump_existing_score(GameApp* app, uint8_t level) {
 
 static void load_settings(GameApp* app) {
     app->sound_enabled = true;
+    app->volume = 100;
     app->vibro_enabled = true;
     app->led_enabled = true;
 
     File* file = storage_file_alloc(app->storage);
     if(storage_file_open(file, SETTINGS_PATH, FSAM_READ, FSOM_OPEN_EXISTING)) {
-        char buf[8];
+        char buf[16];
         size_t read = storage_file_read(file, buf, sizeof(buf) - 1);
         buf[read] = '\0';
         if(read >= 3) {
             app->sound_enabled = buf[0] == '1';
             app->vibro_enabled = buf[1] == '1';
             app->led_enabled = buf[2] == '1';
+        }
+        /* New format appends ",<volume>" after the 3 flags; older saved
+         * files without it keep the default volume of 100. */
+        char* comma = strchr(buf, ',');
+        if(comma) {
+            int vol = atoi(comma + 1);
+            if(vol < 0) vol = 0;
+            if(vol > 100) vol = 100;
+            app->volume = (uint8_t)vol;
         }
     }
     storage_file_close(file);
@@ -397,12 +415,16 @@ static void save_settings(GameApp* app) {
     storage_common_mkdir(app->storage, APP_DATA_PATH(""));
     File* file = storage_file_alloc(app->storage);
     if(storage_file_open(file, SETTINGS_PATH, FSAM_WRITE, FSOM_CREATE_ALWAYS)) {
-        char buf[4];
-        buf[0] = app->sound_enabled ? '1' : '0';
-        buf[1] = app->vibro_enabled ? '1' : '0';
-        buf[2] = app->led_enabled ? '1' : '0';
-        buf[3] = '\n';
-        storage_file_write(file, buf, 4);
+        char buf[16];
+        int len = snprintf(
+            buf,
+            sizeof(buf),
+            "%c%c%c,%u\n",
+            app->sound_enabled ? '1' : '0',
+            app->vibro_enabled ? '1' : '0',
+            app->led_enabled ? '1' : '0',
+            app->volume);
+        storage_file_write(file, buf, len);
     }
     storage_file_close(file);
     storage_file_free(file);
@@ -595,8 +617,20 @@ static void handle_input(GameApp* app, InputEvent* ev) {
         break;
 
     case ScreenSettings:
-        if(ev->key == InputKeyBack || ev->key == InputKeyLeft) {
+        if(ev->key == InputKeyBack) {
             app->screen = ScreenMenu;
+        } else if(ev->key == InputKeyLeft) {
+            if(app->settings_selection == SETTINGS_VOLUME) {
+                app->volume = app->volume >= 10 ? app->volume - 10 : 0;
+                save_settings(app);
+            } else {
+                app->screen = ScreenMenu;
+            }
+        } else if(ev->key == InputKeyRight) {
+            if(app->settings_selection == SETTINGS_VOLUME) {
+                app->volume = app->volume <= 90 ? app->volume + 10 : 100;
+                save_settings(app);
+            }
         } else if(ev->key == InputKeyUp) {
             /* no wrap-around: stops at the first item */
             if(app->settings_selection > 0) app->settings_selection--;
@@ -611,19 +645,19 @@ static void handle_input(GameApp* app, InputEvent* ev) {
             }
         } else if(ev->key == InputKeyOk) {
             switch(app->settings_selection) {
-            case 0:
+            case SETTINGS_SOUND:
                 app->sound_enabled = !app->sound_enabled;
                 save_settings(app);
                 break;
-            case 1:
+            case SETTINGS_VIBRO:
                 app->vibro_enabled = !app->vibro_enabled;
                 save_settings(app);
                 break;
-            case 2:
+            case SETTINGS_LED:
                 app->led_enabled = !app->led_enabled;
                 save_settings(app);
                 break;
-            case 3:
+            case SETTINGS_RESET:
                 reset_scores(app);
                 app->toast_timer_ms = 1000;
                 break;
@@ -788,6 +822,38 @@ static void draw_scroll_arrow(Canvas* canvas, int16_t cx, int16_t cy, bool up) {
     }
 }
 
+/* A solid triangle pointing in one of the 4 directions - used inside the
+ * arrow fields so the direction reads at a glance instead of relying on a
+ * small font glyph. Same technique as draw_scroll_arrow, just bigger and
+ * in all 4 directions. */
+static void draw_direction_arrow(Canvas* canvas, int16_t cx, int16_t cy, Direction d) {
+    const int16_t size = 7; /* apex-to-base length / half base width */
+    for(int16_t k = 0; k < size; k++) {
+        switch(d) {
+        case DirUp: {
+            int16_t row = cy - size + 1 + k;
+            canvas_draw_line(canvas, cx - k, row, cx + k, row);
+            break;
+        }
+        case DirDown: {
+            int16_t row = cy + size - 1 - k;
+            canvas_draw_line(canvas, cx - k, row, cx + k, row);
+            break;
+        }
+        case DirLeft: {
+            int16_t col = cx - size + 1 + k;
+            canvas_draw_line(canvas, col, cy - k, col, cy + k);
+            break;
+        }
+        case DirRight: {
+            int16_t col = cx + size - 1 - k;
+            canvas_draw_line(canvas, col, cy - k, col, cy + k);
+            break;
+        }
+        }
+    }
+}
+
 /* Details in the otherwise empty corners around the cross: step progress on
  * the top left, the best level on the top right and twinkling stars at the
  * bottom. Everything stays inside the free corner areas so nothing touches
@@ -868,9 +934,7 @@ static void draw_cross(Canvas* canvas, GameApp* app) {
             canvas_draw_rframe(canvas, b.x + 3, b.y + 3, b.w - 6, b.h - 6, 2);
         }
 
-        canvas_set_font(canvas, FontBigNumbers);
-        char s[2] = {b.arrow, '\0'};
-        canvas_draw_str_aligned(canvas, b.cx, b.cy, AlignCenter, AlignCenter, s);
+        draw_direction_arrow(canvas, b.cx, b.cy, d);
 
         if(wrong) {
             canvas_draw_line(canvas, b.x + 4, b.y + 4, b.x + b.w - 4, b.y + b.h - 4);
@@ -1000,19 +1064,47 @@ static void draw_settings(Canvas* canvas, GameApp* app) {
             }
         }
 
-        char text[24];
-        if(i == 3 && app->toast_timer_ms > 0) {
-            snprintf(text, sizeof(text), "Cleared!");
-        } else if(i == 0) {
-            snprintf(text, sizeof(text), "Sound: %s", app->sound_enabled ? "ON" : "OFF");
-        } else if(i == 1) {
-            snprintf(text, sizeof(text), "Vibration: %s", app->vibro_enabled ? "ON" : "OFF");
-        } else if(i == 2) {
-            snprintf(text, sizeof(text), "LED: %s", app->led_enabled ? "ON" : "OFF");
+        if(i == SETTINGS_VOLUME) {
+            /* slider row: label, a bar track with a filled portion, and the
+             * percentage, all on the row's single center line */
+            char pct[6];
+            snprintf(pct, sizeof(pct), "%u%%", app->volume);
+            canvas_draw_str_aligned(
+                canvas, box_x + 4, row_y[slot], AlignLeft, AlignCenter, "Vol");
+
+            const int16_t bar_x = 34, bar_w = 46, bar_h = 6;
+            int16_t bar_y = row_y[slot] - bar_h / 2;
+            canvas_draw_frame(canvas, bar_x, bar_y, bar_w, bar_h);
+            int16_t fill_w = (bar_w - 2) * app->volume / 100;
+            if(fill_w > 0) canvas_draw_box(canvas, bar_x + 1, bar_y + 1, fill_w, bar_h - 2);
+            /* small blinking tick right at the fill edge while adjusting */
+            if(selected && ((app->anim_tick / 6) % 2) == 0 && app->volume > 0 &&
+               app->volume < 100) {
+                canvas_draw_line(
+                    canvas,
+                    bar_x + 1 + fill_w,
+                    bar_y - 1,
+                    bar_x + 1 + fill_w,
+                    bar_y + bar_h);
+            }
+
+            canvas_draw_str_aligned(
+                canvas, box_x + box_w - 4, row_y[slot], AlignRight, AlignCenter, pct);
         } else {
-            snprintf(text, sizeof(text), "Reset Highscore");
+            char text[24];
+            if(i == SETTINGS_RESET && app->toast_timer_ms > 0) {
+                snprintf(text, sizeof(text), "Cleared!");
+            } else if(i == SETTINGS_SOUND) {
+                snprintf(text, sizeof(text), "Sound: %s", app->sound_enabled ? "ON" : "OFF");
+            } else if(i == SETTINGS_VIBRO) {
+                snprintf(text, sizeof(text), "Vibration: %s", app->vibro_enabled ? "ON" : "OFF");
+            } else if(i == SETTINGS_LED) {
+                snprintf(text, sizeof(text), "LED: %s", app->led_enabled ? "ON" : "OFF");
+            } else {
+                snprintf(text, sizeof(text), "Reset Highscore");
+            }
+            canvas_draw_str_aligned(canvas, text_x, row_y[slot], AlignCenter, AlignCenter, text);
         }
-        canvas_draw_str_aligned(canvas, text_x, row_y[slot], AlignCenter, AlignCenter, text);
         canvas_set_color(canvas, ColorBlack);
     }
 

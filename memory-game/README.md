@@ -38,12 +38,12 @@ from the app list and play.
   re-sorted after every run; reaching a level you've already hit before
   just bumps its "×N" counter instead of taking a new spot
 - **Settings screen** — toggle sound, vibration and LED feedback
-  independently, plus a highscore reset
+  independently, adjust the volume with a slider, and reset the highscore
 - **Retro game-over jingle** — a descending run of 6 notes when you lose a
   run, just two short notes when you quit on purpose
-- **Polished UI** — rounded panels, scroll indicators, small idle
-  animations (twinkling stars, a pulsing button, falling confetti on a
-  new record)
+- **Polished UI** — rounded panels, real arrow shapes in the gameplay
+  fields, scroll indicators, small idle animations (twinkling stars, a
+  pulsing button, falling confetti on a new record)
 
 ## 📥 Installation
 
@@ -83,6 +83,9 @@ python -m ufbt launch   # builds AND installs/launches it on a connected Flipper
 | Title screen | `Up`/`Down` | Select Start / Settings |
 | | `Left` / `Right` | Rules / Highscore |
 | | `OK` | Confirm selection |
+| Settings | `Up`/`Down` | Select a row |
+| | `Left`/`Right` (on Volume) | Adjust volume |
+| | `Left` (elsewhere) / `Back` | Back to menu |
 | Watching phase | — | Just watch the pattern |
 | Your turn | `Up`/`Down`/`Left`/`Right` | Guess the next step (no OK needed) |
 | Any screen | `Back` (short) | Go back / "Quit game?" prompt during a run |
